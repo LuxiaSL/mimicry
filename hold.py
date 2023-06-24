@@ -1,5 +1,9 @@
+# todo: fix calculations!!
+#  stats on most called, include stack proportion for imagination
+#  fix sorts (sorting alphabetically, not numerically), catch errors on delete and select
+
+
 import json
-import threading
 import tkinter as tk
 from tkinter import messagebox
 from tkinter import simpledialog
@@ -94,10 +98,14 @@ class Application(tk.Frame):
         self.search_results.grid(row=3, column=0, columnspan=5, sticky='nsew', padx=5)
         self.search_results.bind('<<ListboxSelect>>', self.on_item_selected)
 
-        # Rate input
-        self.rate_var = tk.StringVar(value='0')
-        self.rate_input = tk.Entry(self, textvariable=self.rate_var, font=self.default_font, width=4)
-        self.rate_input.grid(row=4, column=0, padx=5)
+        # Rate label and text box
+        rate_frame = tk.Frame(self, bg='lightgray')
+        rate_frame.grid(row=4, column=0, columnspan=1, padx=5)
+        self.rate_label = tk.Label(rate_frame, text="Rate /s:", font=self.default_font, bg='lightgray')
+        self.rate_label.pack(side='left')
+        self.rate_entry = tk.Entry(rate_frame, font=self.default_font, width=5)
+        self.rate_entry.insert(0, '0')  # Default rate
+        self.rate_entry.pack(side='left')
 
         # Add item button
         self.add_item_button = tk.Button(self, text="Add", font=self.default_font, command=self.add_item,
@@ -125,7 +133,7 @@ class Application(tk.Frame):
     def add_item(self):
         name = self.search_var.get()
         if name in self.item_data:
-            rate = int(self.rate_var.get())
+            rate = float(self.rate_entry.get())
             self.item_list.append({'name': name, 'rate': rate, 'cap': self.item_data[name]})
             item = self.item_list[-1]
             self.items_table.insert('', 'end', values=(item['name'], item['cap'], item['rate'], ''))
@@ -137,7 +145,7 @@ class Application(tk.Frame):
                 self.item_data[name] = cap_size
                 with open('items.json', 'w') as f:
                     json.dump(self.item_data, f)
-                rate = int(self.rate_var.get())
+                rate = float(self.rate_entry.get())
                 self.item_list.append({'name': name, 'rate': rate, 'cap': cap_size})
                 item = self.item_list[-1]
                 self.items_table.insert('', 'end', values=(item['name'], item['cap'], item['rate'], ''))
@@ -157,25 +165,12 @@ class Application(tk.Frame):
         result = calculate_distribution(cargo_size, self.item_list)
 
         # Update the items table with the calculated amounts
+        children = self.items_table.get_children()
         for i, item in enumerate(result):
-            try:
-                self.items_table.set(i, 'Amount', item['amount'])
-            except tk.TclError:
-                # Item was removed, skip it
-                continue
+            if i < len(children):
+                item_id = children[i]
+                self.items_table.set(item_id, 'Amount', item['amount'])
 
-    def calculate_thread(self, cargo_size):
-        result = calculate_distribution(cargo_size, self.item_list)
-
-        # Update the items table with the calculated amounts
-        for i, item in enumerate(result):
-            try:
-                self.items_table.set(i, 'Amount', item['amount'])
-            except tk.TclError:
-                # Item was removed, skip it
-                continue
-
-        self.calculate_button["state"] = "normal"
 
 root = tk.Tk()
 root.geometry('830x550')
