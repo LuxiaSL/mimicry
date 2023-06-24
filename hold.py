@@ -1,5 +1,5 @@
-# todo: fix calculations!!
-#  stats on most called, include stack proportion for imagination
+# todo:
+#  stats on most called
 #  fix sorts (sorting alphabetically, not numerically), catch errors on delete and select
 
 
@@ -12,21 +12,29 @@ from tkinter import ttk
 
 
 def calculate_distribution(cargo_size, item_list):
-    total_usage = sum([item['rate'] for item in item_list])
-    distribution = []
+    # Step 1: Calculate the total "time to use" of all items.
+    total_time_to_use = sum([item['rate'] / item['cap'] for item in item_list])
 
+    # Step 2: For each item, calculate its proportion of the total "time to use".
+    distribution = []
     for item in item_list:
-        proportion = item['rate'] / total_usage
-        slots = cargo_size * proportion
+        proportion = (item['rate'] / item['cap']) / total_time_to_use
+
+        # Step 3: Allocate cargo slots based on each item's proportion.
+        slots = round(cargo_size * proportion)
+
+        # Step 4: For each item, calculate the amount to be packed based on the number of slots allocated
+        # to it and the item's stack size. Also, include the number of slots it should occupy.
         amount = slots * item['cap']
-        stacks = slots
         distribution.append({
             'item': item['name'],
             'amount': amount,
-            'stacks': stacks
+            'stacks': slots,
+            'slots': slots
         })
-
     return distribution
+
+
 
 
 class SortableTable(ttk.Treeview):
@@ -84,7 +92,7 @@ class Application(tk.Frame):
         self.calculate_button.grid(row=0, column=4, padx=5, pady=10)
 
         # Items table
-        self.items_table = SortableTable(self, columns=('Name', 'Cap size', 'Rate', 'Amount'), show='headings')
+        self.items_table = SortableTable(self, columns=('Name', 'Cap size', 'Rate', 'Amount', 'Stacks'), show='headings')
         self.items_table.grid(row=1, column=0, columnspan=5, sticky='nsew')
 
         # Search box
@@ -136,7 +144,7 @@ class Application(tk.Frame):
             rate = float(self.rate_entry.get())
             self.item_list.append({'name': name, 'rate': rate, 'cap': self.item_data[name]})
             item = self.item_list[-1]
-            self.items_table.insert('', 'end', values=(item['name'], item['cap'], item['rate'], ''))
+            self.items_table.insert('', 'end', values=(item['name'], item['cap'], item['rate'], '', ''))
             self.calculate()  # Update the calculation
         else:
             should_add = messagebox.askyesno("Question", "Item not found in the database. Would you like to add it?")
@@ -148,7 +156,7 @@ class Application(tk.Frame):
                 rate = float(self.rate_entry.get())
                 self.item_list.append({'name': name, 'rate': rate, 'cap': cap_size})
                 item = self.item_list[-1]
-                self.items_table.insert('', 'end', values=(item['name'], item['cap'], item['rate'], ''))
+                self.items_table.insert('', 'end', values=(item['name'], item['cap'], item['rate'], '', ''))
                 self.calculate()  # Update the calculation
 
     def remove_item(self):
@@ -170,6 +178,7 @@ class Application(tk.Frame):
             if i < len(children):
                 item_id = children[i]
                 self.items_table.set(item_id, 'Amount', item['amount'])
+                self.items_table.set(item_id, 'Stacks', item['stacks'])
 
 
 root = tk.Tk()
