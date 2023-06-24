@@ -156,14 +156,13 @@ class Application(tk.Frame):
         cargo_size = int(self.cargo_size_entry.get())
         result = calculate_distribution(cargo_size, self.item_list)
 
-        # Clear the items table
-        self.items_table.delete(*self.items_table.get_children())
-
         # Update the items table with the calculated amounts
-        for item in result:
-            self.items_table.insert('', 'end', values=(item['item'], item['cap'], item['stacks'], item['amount']))
-
-        self.calculate_button["state"] = "normal"
+        for i, item in enumerate(result):
+            try:
+                self.items_table.set(i, 'Amount', item['amount'])
+            except tk.TclError:
+                # Item was removed, skip it
+                continue
 
     def calculate_thread(self, cargo_size):
         result = calculate_distribution(cargo_size, self.item_list)
