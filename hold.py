@@ -30,8 +30,6 @@ def calculate_distribution(cargo_size, item_list):
     return distribution
 
 
-
-
 class SortableTable(ttk.Treeview):
     """A ttk.Treeview widget that allows the user to sort rows by clicking on the header."""
 
@@ -70,11 +68,16 @@ class Application(tk.Frame):
         super().__init__(master, bg='lightgray')
         self.master = master
         self.grid(padx=15, pady=15)
-
         # Load the stats database from the JSON file
         self.stats_data = self.load_stats_data()
 
         self.create_widgets()
+
+        # Populate the search results initially sorted by usage stats
+        items_with_stats = [(item, self.stats_data.get(item, 0)) for item in self.item_data]
+        sorted_items = sorted(items_with_stats, key=lambda x: x[1], reverse=True)
+        for item, _ in sorted_items:
+            self.search_results.insert(tk.END, item)
 
     def create_widgets(self):
         self.item_list = []
@@ -141,30 +144,18 @@ class Application(tk.Frame):
         search_term = search_var.get().lower()
         self.search_results.delete(0, tk.END)
 
-        # Create a list of tuples containing the item name, stats count, and matching character percentage
-        items_with_stats = [(item, self.stats_data.get(item, 0), self.calculate_matching_percentage(search_term, item))
-                            for item in self.item_data]
+        # Create a list of tuples containing the item name and stats count
+        items_with_stats = [(item, self.stats_data.get(item, 0)) for item in self.item_data]
 
-        # Sort the items based on the stats count in descending order and the matching character percentage in descending order
-        sorted_items = sorted(items_with_stats, key=lambda x: (x[1], x[2]), reverse=True)
+        # Filter the list to include only items containing the search term as a substring
+        matching_items = [(item, stats) for item, stats in items_with_stats if search_term in item.lower()]
+
+        # Sort the items based on the stats count in descending order
+        sorted_items = sorted(matching_items, key=lambda x: x[1], reverse=True)
 
         # Iterate through the sorted items and add them to the search results listbox
-        for item, _, _ in sorted_items:
-            if search_term in item.lower():
-                self.search_results.insert(tk.END, item)
-
-    def calculate_matching_percentage(self, search_term, item):
-        common_length = 0
-        min_length = min(len(search_term), len(item))
-        for i in range(min_length):
-            if search_term[i] == item[i]:
-                common_length += 1
-            else:
-                break
-        if min_length > 0:
-            return common_length / min_length
-        else:
-            return 0.0
+        for item, _ in sorted_items:
+            self.search_results.insert(tk.END, item)
 
     def on_item_selected(self, event):
         try:
@@ -173,6 +164,7 @@ class Application(tk.Frame):
         except tk.TclError:
             pass  # Invalid listbox index, do nothing
 
+    """
     def add_item(self):
         name = self.search_var.get()
         if name in self.item_data:
@@ -197,19 +189,51 @@ class Application(tk.Frame):
                 item = self.item_list[-1]
                 self.items_table.insert('', 'end', values=(item['name'], item['cap'], item['rate'], '', ''))
                 self.calculate()  # Update the calculation
+    """
+
+    def add_item(self):
+        name = self.search_var.get()
+        if name in self.item_data:
+            rate = float(self.rate_entry.get())
+            for i, item in enumerate(self.item_list):
+                if item['name'] == name:
+                    item['rate'] += rate
+                    treeview_id = item['id']  # Get the treeview ID stored in the item
+                    self.items_table.item(treeview_id, values=(item['name'], item['cap'], item['rate'], '', ''))
+                    break
+            else:  # Item is not in the list, add it
+                cap = self.item_data[name]
+                treeview_id = self.items_table.insert('', 'end', values=(name, cap, rate, '', ''))
+                self.item_list.append({'name': name, 'rate': rate, 'cap': cap, 'id': treeview_id})
+                self.increment_stats_count(name)
+        else:  # Item is not in the database
+            should_add = messagebox.askyesno("Question", "Item not found in the database. Would you like to add it?")
+            if should_add:
+                cap_size = simpledialog.askinteger("Input", "Enter the item's cap size:", parent=self.master)
+                self.item_data[name] = cap_size
+                with open('items.json', 'w') as f:
+                    json.dump(self.item_data, f)
+                rate = float(self.rate_entry.get())
+                treeview_id = self.items_table.insert('', 'end', values=(name, cap_size, rate, '', ''))
+                self.item_list.append({'name': name, 'rate': rate, 'cap': cap_size, 'id': treeview_id})
+        self.calculate()  # Update the calculation
 
     def remove_item(self):
         try:
             selected_item = self.items_table.selection()[0]
             item_name = self.items_table.item(selected_item)['values'][0]
 
-            # Decrement the stats count for the item
-            self.decrement_stats_count(item_name)
+            self.items_table.delete(selected_item)  # Remove the item from the Treeview
 
-            self.items_table.delete(selected_item)
-            del self.item_list[int(selected_item)]
-        except IndexError:
-            # No item selected, do nothing
+            # Decrement the stats count for the item and remove it from the item list
+            for i in range(len(self.item_list) - 1, -1, -1):
+                if self.item_list[i]['name'] == item_name:
+                    self.decrement_stats_count(item_name)
+                    del self.item_list[i]
+
+            self.calculate()  # Update the calculation
+
+        except IndexError:  # No item selected, do nothing
             return
 
     def decrement_stats_count(self, item_name):
