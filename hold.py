@@ -21,11 +21,16 @@ def calculate_distribution(cargo_size, item_list):
         # Step 4: For each item, calculate the amount to be packed based on the number of slots allocated
         # to it and the item's stack size. Also, include the number of slots it should occupy.
         amount = slots * item['cap']
+
+        # Step 5: calculate exact time to use for individual item and then attach it
+        time_to_use = amount / item['rate'] if item['rate'] else 1
+
         distribution.append({
             'item': item['name'],
             'amount': amount,
             'stacks': slots,
-            'slots': slots
+            'slots': slots,
+            'time_to_use': time_to_use,
         })
     return distribution
 
@@ -88,14 +93,18 @@ class Application(tk.Frame):
         with open('items.json', 'r') as f:
             self.item_data = json.load(f)
 
+        # avg time to ship
+        self.avg_time_label = tk.Label(self, text="Time to Ship: 0s", font=self.default_font, bg='lightgray')
+        self.avg_time_label.grid(row=0, column=0, padx=5, sticky="ne")
+
         # Remove item button
-        self.remove_item_button = tk.Button(self, text="-", font=self.default_font, command=self.remove_item,
+        self.remove_item_button = tk.Button(self, text="\u2796", font=self.default_font, command=self.remove_item,
                                             bg='salmon', width=3, height=1)
-        self.remove_item_button.grid(row=0, column=0, padx=5, pady=10, sticky='w')
+        self.remove_item_button.grid(row=1, column=0, padx=5, pady=10, sticky='w')
 
         # Cargo size label and text box
         cargo_size_frame = tk.Frame(self, bg='lightgray')
-        cargo_size_frame.grid(row=0, column=1, columnspan=1, padx=5)
+        cargo_size_frame.grid(row=1, column=1, columnspan=1, padx=5)
         self.cargo_size_label = tk.Label(cargo_size_frame, text="Cargo Size:", font=self.default_font, bg='lightgray')
         self.cargo_size_label.pack(side='left')
         self.cargo_size_entry = tk.Entry(cargo_size_frame, font=self.default_font, width=4)
@@ -105,36 +114,36 @@ class Application(tk.Frame):
         # Calculate button
         self.calculate_button = tk.Button(self, text="\u2699", font=self.default_font, command=self.calculate,
                                           bg='lightblue', width=3, height=1)
-        self.calculate_button.grid(row=0, column=4, padx=5, pady=10)
+        self.calculate_button.grid(row=1, column=4, padx=5, pady=10)
 
         # Items table
         self.items_table = SortableTable(self, columns=('Name', 'Cap size', 'Rate', 'Amount', 'Stacks'), show='headings', height=16)
-        self.items_table.grid(row=1, column=0, columnspan=5, sticky='nsew')
+        self.items_table.grid(row=2, column=0, columnspan=5, sticky='nsew')
 
         # Search box
         self.search_var = tk.StringVar()
         self.search_var.trace("w", lambda name, index, mode, sv=self.search_var: self.update_listbox(sv))
         self.search_box = tk.Entry(self, textvariable=self.search_var, font=self.default_font)
-        self.search_box.grid(row=2, column=0, columnspan=2, sticky='w', padx=5, pady=5)
+        self.search_box.grid(row=3, column=0, columnspan=2, sticky='w', padx=5, pady=5)
 
         # Listbox for search results
         self.search_results = tk.Listbox(self, height=5, font=self.default_font)
-        self.search_results.grid(row=3, column=0, columnspan=5, sticky='nsew', padx=5)
+        self.search_results.grid(row=4, column=0, columnspan=5, sticky='nsew', padx=5)
         self.search_results.bind('<<ListboxSelect>>', self.on_item_selected)
 
         # Rate label and text box
         rate_frame = tk.Frame(self, bg='lightgray')
-        rate_frame.grid(row=4, column=0, columnspan=1, padx=5)
+        rate_frame.grid(row=5, column=0, columnspan=1, padx=5)
         self.rate_label = tk.Label(rate_frame, text="Rate /s:", font=self.default_font, bg='lightgray')
         self.rate_label.pack(side='left')
         self.rate_entry = tk.Entry(rate_frame, font=self.default_font, width=5)
-        self.rate_entry.insert(0, '0')  # Default rate
+        self.rate_entry.insert(0, '1')  # Default rate
         self.rate_entry.pack(side='left')
 
         # Add item button
         self.add_item_button = tk.Button(self, text="Add", font=self.default_font, command=self.add_item,
                                          bg='lightgreen', width=3, height=1)
-        self.add_item_button.grid(row=4, column=1, pady=5)
+        self.add_item_button.grid(row=5, column=1, pady=5)
 
         # Make the search row and table resizable
         self.rowconfigure(3, weight=1)
@@ -163,33 +172,6 @@ class Application(tk.Frame):
             self.search_var.set(selected_item)
         except tk.TclError:
             pass  # Invalid listbox index, do nothing
-
-    """
-    def add_item(self):
-        name = self.search_var.get()
-        if name in self.item_data:
-            rate = float(self.rate_entry.get())
-            self.item_list.append({'name': name, 'rate': rate, 'cap': self.item_data[name]})
-            item = self.item_list[-1]
-            self.items_table.insert('', 'end', values=(item['name'], item['cap'], item['rate'], '', ''))
-
-            # Increment the stats count for the item
-            self.increment_stats_count(name)
-
-            self.calculate()  # Update the calculation
-        else:
-            should_add = messagebox.askyesno("Question", "Item not found in the database. Would you like to add it?")
-            if should_add:
-                cap_size = simpledialog.askinteger("Input", "Enter the item's cap size:", parent=self.master)
-                self.item_data[name] = cap_size
-                with open('items.json', 'w') as f:
-                    json.dump(self.item_data, f)
-                rate = float(self.rate_entry.get())
-                self.item_list.append({'name': name, 'rate': rate, 'cap': cap_size})
-                item = self.item_list[-1]
-                self.items_table.insert('', 'end', values=(item['name'], item['cap'], item['rate'], '', ''))
-                self.calculate()  # Update the calculation
-    """
 
     def add_item(self):
         name = self.search_var.get()
@@ -273,6 +255,10 @@ class Application(tk.Frame):
         cargo_size = int(self.cargo_size_entry.get())
         result = calculate_distribution(cargo_size, self.item_list)
 
+        # Calculate the average time to ship and update the label
+        avg_time_to_ship = sum([item['time_to_use'] for item in result]) / len(result)
+        self.avg_time_label.config(text=f"Time to Ship: {avg_time_to_ship:.2f}s")
+
         # Update the items table with the calculated amounts
         children = self.items_table.get_children()
         for i, item in enumerate(result):
@@ -283,6 +269,6 @@ class Application(tk.Frame):
 
 
 root = tk.Tk()
-root.geometry('505x625')
+root.geometry('505x655')
 app = Application(master=root)
 app.mainloop()
